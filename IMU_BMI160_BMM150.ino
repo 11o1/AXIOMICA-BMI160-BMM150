@@ -1,5 +1,5 @@
 /**
- * @file Universal_9Axis_Final.ino
+ * @file IMU_BMI160_BMM150.ino
  * @brief Универсальная 9-осевая система: BMI160 + BMM150 (финальная версия)
  * 
  * Эта программа демонстрирует использование библиотеки IMU_BMI160_BMM150
@@ -15,7 +15,7 @@
  * 
  * @author Bosch + Custom
  * @date 2025-10-11
- * @version 1.2
+ * @version 1.3
  * 
  * @note Для включения отладочного вывода раскомментируйте #define IMU_BMI160_BMM150_DEBUG
  * 
@@ -58,8 +58,6 @@ void setup() {
 }
 
 void loop() {
-    static unsigned long last_output = 0;
-    
     int16_t acc_raw[3] = {0}, gyr_raw[3] = {0}, mag_raw[3] = {0};
     int16_t rhall_raw = 0;
 
@@ -86,29 +84,27 @@ void loop() {
     };
 
     // Выводим данные в формате, удобном для анализа
-    unsigned long current_time = millis();
-    if (current_time - last_output >= 100) { // Выводим данные каждые 100 мс
-        Serial.print(current_time); Serial.print("\t");
-        Serial.print(acc_raw[0]); Serial.print("\t");
-        Serial.print(acc_raw[1]); Serial.print("\t");
-        Serial.print(acc_raw[2]); Serial.print("\t");
-        Serial.print(gyr_raw[0]); Serial.print("\t");
-        Serial.print(gyr_raw[1]); Serial.print("\t");
-        Serial.print(gyr_raw[2]); Serial.print("\t");
-        Serial.print(mag_raw[0]); Serial.print("\t");
-        Serial.print(mag_raw[1]); Serial.print("\t");
-        Serial.print(mag_raw[2]); Serial.print("\t");
-        Serial.print(rhall_raw); Serial.print("\t"); 
-        Serial.print(String(acc_si[0], 3)); Serial.print("\t");
-        Serial.print(String(acc_si[1], 3)); Serial.print("\t");
-        Serial.print(String(acc_si[2], 3)); Serial.print("\t");
-        Serial.print(String(gyr_si[0], 3)); Serial.print("\t");
-        Serial.print(String(gyr_si[1], 3)); Serial.print("\t");
-        Serial.print(String(gyr_si[2], 3)); Serial.print("\t");
-        Serial.print(String(mag_si[0], 3)); Serial.print("\t");
-        Serial.print(String(mag_si[1], 3)); Serial.print("\t");
-        Serial.println(String(mag_si[2], 3));
-        
-        last_output = current_time;
-    }
+    Serial.print(millis()); Serial.print("\t");
+    Serial.print(acc_raw[0]); Serial.print("\t");
+    Serial.print(acc_raw[1]); Serial.print("\t");
+    Serial.print(acc_raw[2]); Serial.print("\t");
+    Serial.print(gyr_raw[0]); Serial.print("\t");
+    Serial.print(gyr_raw[1]); Serial.print("\t");
+    Serial.print(gyr_raw[2]); Serial.print("\t");
+    Serial.print(mag_raw[0]); Serial.print("\t");
+    Serial.print(mag_raw[1]); Serial.print("\t");
+    Serial.print(mag_raw[2]); Serial.print("\t");
+    Serial.print(rhall_raw); Serial.print("\t"); 
+    Serial.print(String(acc_si[0], 3)); Serial.print("\t");
+    Serial.print(String(acc_si[1], 3)); Serial.print("\t");
+    Serial.print(String(acc_si[2], 3)); Serial.print("\t");
+    Serial.print(String(gyr_si[0], 3)); Serial.print("\t");
+    Serial.print(String(gyr_si[1], 3)); Serial.print("\t");
+    Serial.print(String(gyr_si[2], 3)); Serial.print("\t");
+    Serial.print(String(mag_si[0], 3)); Serial.print("\t");
+    Serial.print(String(mag_si[1], 3)); Serial.print("\t");
+    Serial.println(String(mag_si[2], 3));
+    
+    // Добавляем небольшую задержку для стабильности
+    delay(1);
 }
