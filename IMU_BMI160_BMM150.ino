@@ -1,5 +1,5 @@
 /**
- * @file IMU_BMI160_BMM150.ino
+ * @file Universal_9Axis_Final.ino
  * @brief Универсальная 9-осевая система: BMI160 + BMM150 (финальная версия)
  * 
  * Эта программа демонстрирует использование библиотеки IMU_BMI160_BMM150
@@ -15,7 +15,7 @@
  * 
  * @author Bosch + Custom
  * @date 2025-10-11
- * @version 1.3
+ * @version 1.4
  * 
  * @note Для включения отладочного вывода раскомментируйте #define IMU_BMI160_BMM150_DEBUG
  * 
@@ -104,7 +104,4 @@ void loop() {
     Serial.print(String(mag_si[0], 3)); Serial.print("\t");
     Serial.print(String(mag_si[1], 3)); Serial.print("\t");
     Serial.println(String(mag_si[2], 3));
-    
-    // Добавляем небольшую задержку для стабильности
-    delay(1);
 }

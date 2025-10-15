@@ -21,7 +21,7 @@
  * 
  * @author Bosch Sensortec + Custom
  * @date 2025-10-11
- * @version 1.3
+ * @version 1.4
  * 
  * Документация:
  * - BMI160: BMM150 DOC012143196.pdf
@@ -78,6 +78,9 @@
 
 // Максимальная частота для магнитометра (Гц)
 #define MAX_MAG_FREQUENCY 100
+
+// Максимальное время ожидания данных (мс)
+#define MAX_DATA_TIMEOUT 50
 
 // === СТАТИЧЕСКИЕ ПЕРЕМЕННЫЕ ===
 static uint8_t bmi160_addr = 0;
@@ -1012,18 +1015,16 @@ bool IMU_isInitialized() {
  * 1. Устанавливает максимальную частоту измерений для всех датчиков
  * 2. Считывает данные с максимально возможной частотой
  * 3. Усредняет данные для достижения заданной частоты
- * 4. Обрабатывает возможные различия в скорости работы датчиков
+ * 4. Всегда возвращает последнее прочитанное значение, если новые данные недоступны
  * 
- * @note Функция не возвращает нулевые значения при отсутствии новых данных
- * @note Всегда возвращает последнее валидное значение
- * @note Если данные недоступны, возвращаются последнее валидное значение
+ * @note Функция НИКОГДА не возвращает нулевые значения, если есть предыдущие данные
+ * @note Если данные не обновляются, возвращается последнее прочитанное значение
  */
 void IMU_readDataWithFrequency(int16_t *acc, int16_t *gyr, int16_t *mag, int16_t *rhall, float frequency) {
     // Проверка валидности частоты
     if (frequency <= 0) {
         frequency = 10.0f; // Минимальная частота 10 Гц
     }
-
     // Определяем максимальную доступную частоту
     float max_frequency = MAX_ACC_FREQUENCY;
     if (max_frequency > MAX_GYR_FREQUENCY) {
@@ -1032,153 +1033,56 @@ void IMU_readDataWithFrequency(int16_t *acc, int16_t *gyr, int16_t *mag, int16_t
     if (mag_mode != NONE && max_frequency > MAX_MAG_FREQUENCY) {
         max_frequency = MAX_MAG_FREQUENCY;
     }
-
     // Если заданная частота выше максимальной, используем максимальную
     if (frequency > max_frequency) {
         frequency = max_frequency;
     }
-
     // Вычисляем интервал между усреднениями
     unsigned long interval = (unsigned long)(1000.0f / frequency);
     
-    // Статические переменные для накопления данных
-    static unsigned long last_time = 0;
-    static int32_t acc_sum[3] = {0};
-    static int32_t gyr_sum[3] = {0};
-    static int32_t mag_sum[3] = {0};
-    static int32_t rhall_sum = 0;
-    static uint32_t samples = 0;
-    
     // Статические переменные для хранения последних валидных значений
-    static int16_t last_valid_acc[3] = {0};
-    static int16_t last_valid_gyr[3] = {0};
-    static int16_t last_valid_mag[3] = {0};
-    static int16_t last_valid_rhall = 0;
-    static bool has_valid_data = false;
+    static int16_t last_acc[3] = {0};
+    static int16_t last_gyr[3] = {0};
+    static int16_t last_mag[3] = {0};
+    static int16_t last_rhall = 0;
     
-    // При первом вызове инициализируем last_time
-    if (last_time == 0) {
-        last_time = millis();
-        has_valid_data = false;
-    }
+    // Статическая переменная для отслеживания времени последнего чтения данных
+    static unsigned long last_read_time = 0;
     
     // Текущее время
     unsigned long current_time = millis();
     
-    // Считываем данные
-    int16_t acc_raw[3], gyr_raw[3], mag_raw[3];
-    int16_t rhall_raw;
-    IMU_readData(acc_raw, gyr_raw, mag_raw, &rhall_raw);
-    
-    // Проверяем, что данные не нулевые
-    bool data_valid = (acc_raw[0] != 0 || acc_raw[1] != 0 || acc_raw[2] != 0 ||
-                      gyr_raw[0] != 0 || gyr_raw[1] != 0 || gyr_raw[2] != 0 ||
-                      mag_raw[0] != 0 || mag_raw[1] != 0 || mag_raw[2] != 0);
-    
-    // Обработка данных
-    if (data_valid) {
-        // Накапливаем суммы для усреднения
-        acc_sum[0] += acc_raw[0];
-        acc_sum[1] += acc_raw[1];
-        acc_sum[2] += acc_raw[2];
+    // Обновляем данные только если прошло достаточно времени
+    if (current_time - last_read_time >= interval || last_read_time == 0) {
+        // Считываем данные
+        int16_t acc_raw[3], gyr_raw[3], mag_raw[3];
+        int16_t rhall_raw;
+        IMU_readData(acc_raw, gyr_raw, mag_raw, &rhall_raw);
         
-        gyr_sum[0] += gyr_raw[0];
-        gyr_sum[1] += gyr_raw[1];
-        gyr_sum[2] += gyr_raw[2];
+        // Обновляем последние значения
+        last_acc[0] = acc_raw[0];
+        last_acc[1] = acc_raw[1];
+        last_acc[2] = acc_raw[2];
+        last_gyr[0] = gyr_raw[0];
+        last_gyr[1] = gyr_raw[1];
+        last_gyr[2] = gyr_raw[2];
+        last_mag[0] = mag_raw[0];
+        last_mag[1] = mag_raw[1];
+        last_mag[2] = mag_raw[2];
+        last_rhall = rhall_raw;
         
-        mag_sum[0] += mag_raw[0];
-        mag_sum[1] += mag_raw[1];
-        mag_sum[2] += mag_raw[2];
-        
-        rhall_sum += rhall_raw;
-        
-        // Обновляем последнее валидное значение
-        last_valid_acc[0] = acc_raw[0];
-        last_valid_acc[1] = acc_raw[1];
-        last_valid_acc[2] = acc_raw[2];
-        
-        last_valid_gyr[0] = gyr_raw[0];
-        last_valid_gyr[1] = gyr_raw[1];
-        last_valid_gyr[2] = gyr_raw[2];
-        
-        last_valid_mag[0] = mag_raw[0];
-        last_valid_mag[1] = mag_raw[1];
-        last_valid_mag[2] = mag_raw[2];
-        
-        last_valid_rhall = rhall_raw;
-        has_valid_data = true;
-        
-        // Увеличиваем счетчик выборок
-        samples++;
+        last_read_time = current_time; // Обновляем время последнего чтения
     }
     
-    // Если прошло достаточно времени для нового усреднения
-    if (current_time - last_time >= interval) {
-        // Усредняем накопленные данные
-        if (samples > 0) {
-            acc[0] = acc_sum[0] / samples;
-            acc[1] = acc_sum[1] / samples;
-            acc[2] = acc_sum[2] / samples;
-            
-            gyr[0] = gyr_sum[0] / samples;
-            gyr[1] = gyr_sum[1] / samples;
-            gyr[2] = gyr_sum[2] / samples;
-            
-            mag[0] = mag_sum[0] / samples;
-            mag[1] = mag_sum[1] / samples;
-            mag[2] = mag_sum[2] / samples;
-            
-            *rhall = rhall_sum / samples;
-            
-            // Сбрасываем накопленные значения
-            acc_sum[0] = acc_sum[1] = acc_sum[2] = 0;
-            gyr_sum[0] = gyr_sum[1] = gyr_sum[2] = 0;
-            mag_sum[0] = mag_sum[1] = mag_sum[2] = 0;
-            rhall_sum = 0;
-            samples = 0;
-            
-            // Обновляем время последнего усреднения
-            last_time = current_time;
-        } else {
-            // Если нет накопленных данных, возвращаем последнее валидное значение
-            if (has_valid_data) {
-                acc[0] = last_valid_acc[0];
-                acc[1] = last_valid_acc[1];
-                acc[2] = last_valid_acc[2];
-                
-                gyr[0] = last_valid_gyr[0];
-                gyr[1] = last_valid_gyr[1];
-                gyr[2] = last_valid_gyr[2];
-                
-                mag[0] = last_valid_mag[0];
-                mag[1] = last_valid_mag[1];
-                mag[2] = last_valid_mag[2];
-                
-                *rhall = last_valid_rhall;
-            } else {
-                // Если еще не было валидных данных, возвращаем нули
-                acc[0] = acc[1] = acc[2] = 0;
-                gyr[0] = gyr[1] = gyr[2] = 0;
-                mag[0] = mag[1] = mag[2] = 0;
-                *rhall = 0;
-            }
-        }
-    }
-    
-    // Если данные были недоступны, но у нас есть последнее валидное значение, возвращаем его
-    if (!data_valid && has_valid_data && samples == 0) {
-        acc[0] = last_valid_acc[0];
-        acc[1] = last_valid_acc[1];
-        acc[2] = last_valid_acc[2];
-        
-        gyr[0] = last_valid_gyr[0];
-        gyr[1] = last_valid_gyr[1];
-        gyr[2] = last_valid_gyr[2];
-        
-        mag[0] = last_valid_mag[0];
-        mag[1] = last_valid_mag[1];
-        mag[2] = last_valid_mag[2];
-        
-        *rhall = last_valid_rhall;
-    }
+    // ВСЕГДА возвращаем последние прочитанные значения
+    acc[0] = last_acc[0];
+    acc[1] = last_acc[1];
+    acc[2] = last_acc[2];
+    gyr[0] = last_gyr[0];
+    gyr[1] = last_gyr[1];
+    gyr[2] = last_gyr[2];
+    mag[0] = last_mag[0];
+    mag[1] = last_mag[1];
+    mag[2] = last_mag[2];
+    *rhall = last_rhall;
 }
