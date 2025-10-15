@@ -18,9 +18,9 @@
  * - Поддержка работы только с доступными датчиками
  * - Детальная диагностика и отладочный вывод
  * 
- * @author Bosch Sensortec + Custom
- * @date 2025-10-11
- * @version 1.2
+ * @author Bosch Sensortec + AXIOMICA
+ * @date 2025-10-15
+ * @version 1.5
  * 
  * @note Эта библиотека совместима с Arduino IDE и другими средами, поддерживающими C++
  * @note Для включения отладочного вывода добавьте #define IMU_BMI160_BMM150_DEBUG
