@@ -1014,14 +1014,9 @@ bool IMU_isInitialized() {
  * 3. Усредняет данные для достижения заданной частоты
  * 4. Обрабатывает возможные различия в скорости работы датчиков
  * 
- * @note Функция автоматически определяет оптимальный режим работы
- * @note Если заданная частота выше возможной, используется максимальная
- * 
- * Основные улучшения:
- * - Добавлена проверка валидности данных
- * - Реализована адаптивная частота
- * - Устранена проблема с нулевыми значениями
- * - Улучшена точность усреднения
+ * @note Функция не возвращает нулевые значения при отсутствии новых данных
+ * @note Всегда возвращает последнее валидное значение
+ * @note Если данные недоступны, возвращаются последнее валидное значение
  */
 void IMU_readDataWithFrequency(int16_t *acc, int16_t *gyr, int16_t *mag, int16_t *rhall, float frequency) {
     // Проверка валидности частоты
@@ -1054,9 +1049,17 @@ void IMU_readDataWithFrequency(int16_t *acc, int16_t *gyr, int16_t *mag, int16_t
     static int32_t rhall_sum = 0;
     static uint32_t samples = 0;
     
+    // Статические переменные для хранения последних валидных значений
+    static int16_t last_valid_acc[3] = {0};
+    static int16_t last_valid_gyr[3] = {0};
+    static int16_t last_valid_mag[3] = {0};
+    static int16_t last_valid_rhall = 0;
+    static bool has_valid_data = false;
+    
     // При первом вызове инициализируем last_time
     if (last_time == 0) {
         last_time = millis();
+        has_valid_data = false;
     }
     
     // Текущее время
@@ -1072,63 +1075,42 @@ void IMU_readDataWithFrequency(int16_t *acc, int16_t *gyr, int16_t *mag, int16_t
                       gyr_raw[0] != 0 || gyr_raw[1] != 0 || gyr_raw[2] != 0 ||
                       mag_raw[0] != 0 || mag_raw[1] != 0 || mag_raw[2] != 0);
     
-    // Если данные не валидны, пропускаем их
-    if (!data_valid) {
-        // Если прошло достаточно времени для нового усреднения
-        if (current_time - last_time >= interval) {
-            // Возвращаем усредненные данные
-            if (samples > 0) {
-                acc[0] = acc_sum[0] / samples;
-                acc[1] = acc_sum[1] / samples;
-                acc[2] = acc_sum[2] / samples;
-                
-                gyr[0] = gyr_sum[0] / samples;
-                gyr[1] = gyr_sum[1] / samples;
-                gyr[2] = gyr_sum[2] / samples;
-                
-                mag[0] = mag_sum[0] / samples;
-                mag[1] = mag_sum[1] / samples;
-                mag[2] = mag_sum[2] / samples;
-                
-                *rhall = rhall_sum / samples;
-                
-                // Сбрасываем накопленные значения
-                acc_sum[0] = acc_sum[1] = acc_sum[2] = 0;
-                gyr_sum[0] = gyr_sum[1] = gyr_sum[2] = 0;
-                mag_sum[0] = mag_sum[1] = mag_sum[2] = 0;
-                rhall_sum = 0;
-                samples = 0;
-                
-                // Обновляем время последнего усреднения
-                last_time = current_time;
-            } else {
-                // Иначе возвращаем нулевые значения
-                acc[0] = acc[1] = acc[2] = 0;
-                gyr[0] = gyr[1] = gyr[2] = 0;
-                mag[0] = mag[1] = mag[2] = 0;
-                *rhall = 0;
-            }
-        }
-        return;
+    // Обработка данных
+    if (data_valid) {
+        // Накапливаем суммы для усреднения
+        acc_sum[0] += acc_raw[0];
+        acc_sum[1] += acc_raw[1];
+        acc_sum[2] += acc_raw[2];
+        
+        gyr_sum[0] += gyr_raw[0];
+        gyr_sum[1] += gyr_raw[1];
+        gyr_sum[2] += gyr_raw[2];
+        
+        mag_sum[0] += mag_raw[0];
+        mag_sum[1] += mag_raw[1];
+        mag_sum[2] += mag_raw[2];
+        
+        rhall_sum += rhall_raw;
+        
+        // Обновляем последнее валидное значение
+        last_valid_acc[0] = acc_raw[0];
+        last_valid_acc[1] = acc_raw[1];
+        last_valid_acc[2] = acc_raw[2];
+        
+        last_valid_gyr[0] = gyr_raw[0];
+        last_valid_gyr[1] = gyr_raw[1];
+        last_valid_gyr[2] = gyr_raw[2];
+        
+        last_valid_mag[0] = mag_raw[0];
+        last_valid_mag[1] = mag_raw[1];
+        last_valid_mag[2] = mag_raw[2];
+        
+        last_valid_rhall = rhall_raw;
+        has_valid_data = true;
+        
+        // Увеличиваем счетчик выборок
+        samples++;
     }
-    
-    // Накапливаем суммы для усреднения
-    acc_sum[0] += acc_raw[0];
-    acc_sum[1] += acc_raw[1];
-    acc_sum[2] += acc_raw[2];
-    
-    gyr_sum[0] += gyr_raw[0];
-    gyr_sum[1] += gyr_raw[1];
-    gyr_sum[2] += gyr_raw[2];
-    
-    mag_sum[0] += mag_raw[0];
-    mag_sum[1] += mag_raw[1];
-    mag_sum[2] += mag_raw[2];
-    
-    rhall_sum += rhall_raw;
-    
-    // Увеличиваем счетчик выборок
-    samples++;
     
     // Если прошло достаточно времени для нового усреднения
     if (current_time - last_time >= interval) {
@@ -1158,11 +1140,45 @@ void IMU_readDataWithFrequency(int16_t *acc, int16_t *gyr, int16_t *mag, int16_t
             // Обновляем время последнего усреднения
             last_time = current_time;
         } else {
-            // Если нет накопленных данных, возвращаем нулевые значения
-            acc[0] = acc[1] = acc[2] = 0;
-            gyr[0] = gyr[1] = gyr[2] = 0;
-            mag[0] = mag[1] = mag[2] = 0;
-            *rhall = 0;
+            // Если нет накопленных данных, возвращаем последнее валидное значение
+            if (has_valid_data) {
+                acc[0] = last_valid_acc[0];
+                acc[1] = last_valid_acc[1];
+                acc[2] = last_valid_acc[2];
+                
+                gyr[0] = last_valid_gyr[0];
+                gyr[1] = last_valid_gyr[1];
+                gyr[2] = last_valid_gyr[2];
+                
+                mag[0] = last_valid_mag[0];
+                mag[1] = last_valid_mag[1];
+                mag[2] = last_valid_mag[2];
+                
+                *rhall = last_valid_rhall;
+            } else {
+                // Если еще не было валидных данных, возвращаем нули
+                acc[0] = acc[1] = acc[2] = 0;
+                gyr[0] = gyr[1] = gyr[2] = 0;
+                mag[0] = mag[1] = mag[2] = 0;
+                *rhall = 0;
+            }
         }
+    }
+    
+    // Если данные были недоступны, но у нас есть последнее валидное значение, возвращаем его
+    if (!data_valid && has_valid_data && samples == 0) {
+        acc[0] = last_valid_acc[0];
+        acc[1] = last_valid_acc[1];
+        acc[2] = last_valid_acc[2];
+        
+        gyr[0] = last_valid_gyr[0];
+        gyr[1] = last_valid_gyr[1];
+        gyr[2] = last_valid_gyr[2];
+        
+        mag[0] = last_valid_mag[0];
+        mag[1] = last_valid_mag[1];
+        mag[2] = last_valid_mag[2];
+        
+        *rhall = last_valid_rhall;
     }
 }
