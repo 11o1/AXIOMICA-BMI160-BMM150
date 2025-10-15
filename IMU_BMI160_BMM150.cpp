@@ -19,9 +19,9 @@
  * 3. Подробная диагностика через Serial (при включенной отладке)
  * 4. Поддержка работы только с доступными датчиками
  * 
- * @author Bosch Sensortec + Custom
- * @date 2025-10-11
- * @version 1.4
+ * @author Bosch Sensortec + AXIOMICA
+ * @date 2025-10-15
+ * @version 1.5
  * 
  * Документация:
  * - BMI160: BMM150 DOC012143196.pdf
